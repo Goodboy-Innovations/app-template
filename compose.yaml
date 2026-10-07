@@ -1,0 +1,44 @@
+# Runs the app with its own Postgres, locally.
+#
+#   docker compose up --build      # http://localhost:3000; the app migrates and seeds on start
+#   docker compose up -d db        # only the database, for `npm run dev`
+#   docker compose down -v         # stop and delete the database
+
+services:
+  db:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app
+      POSTGRES_DB: app
+    ports:
+      - '127.0.0.1:5432:5432'
+    volumes:
+      - db-data:/var/lib/postgresql
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U app -d app']
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  app:
+    build:
+      context: .
+      target: runtime
+    # SEED_ADMIN_* and any S3_* come from .env, if it exists.
+    env_file:
+      - path: .env
+        required: false
+    # These override .env, whose values are for `npm run dev`.
+    environment:
+      DATABASE_URL: postgres://app:app@db:5432/app
+      ORIGIN: http://localhost:3000
+      SEED_ON_START: '1'
+    ports:
+      - '127.0.0.1:3000:3000'
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  db-data:
