@@ -6,14 +6,14 @@ import { seedDatabase } from '$lib/server/seed';
 import { requireUser, setSessionCookie } from '$lib/server/session';
 
 // Before the first request: check the environment, bring the schema up to date, and with
-// SEED_ON_START seed an empty database. A failure stops the server. In development
+// SEED_ON_START seed an empty database (with SEED_DEMO, the demo dataset too). A failure stops the server. In development
 // `npm run db:migrate` and `npm run db:seed` do the same.
 export const init: ServerInit = async () => {
 	if (dev || building) return;
 	console.log(`Config: ${checkConfig()}`);
 	await migrateDatabase();
 	console.log('Database: migrations applied');
-	if (config.seedOnStart) await seedDatabase({ admin: config.seedAdmin });
+	if (config.seedOnStart) await seedDatabase({ admin: config.seedAdmin, demo: config.seedDemo });
 	// adapter-node emits this on SIGTERM / SIGINT once open requests are done. Closing the pool
 	// lets the process exit instead of waiting to be killed.
 	process.on('sveltekit:shutdown', () => sql.end());

@@ -34,6 +34,7 @@ services:
       DATABASE_URL: postgres://app:app@db:5432/app
       ORIGIN: http://localhost:3000
       SEED_ON_START: '1'
+      SEED_DEMO: '1'
     ports:
       - '127.0.0.1:3000:3000'
     depends_on:
