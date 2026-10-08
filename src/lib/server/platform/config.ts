@@ -25,6 +25,10 @@ export const config = {
 	get seedAdmin() {
 		return { email: process.env.SEED_ADMIN_EMAIL, password: process.env.SEED_ADMIN_PASSWORD };
 	},
+	/** The demo dataset for an empty database (staging, previews); null when off. */
+	get seedDemo() {
+		return isOn(process.env.SEED_DEMO) ? { password: process.env.SEED_DEMO_PASSWORD } : null;
+	},
 	/** S3-compatible bucket for uploads; null when uploads are off. */
 	get s3() {
 		const env = process.env;
@@ -88,7 +92,8 @@ const GROUPS = [
 		required: ['S3_ENDPOINT', 'S3_BUCKET', 'S3_ACCESS_KEY_ID', 'S3_SECRET_ACCESS_KEY'],
 		optional: ['S3_REGION', 'S3_PREFIX']
 	},
-	{ required: ['SEED_ADMIN_EMAIL', 'SEED_ADMIN_PASSWORD'], optional: [] }
+	{ required: ['SEED_ADMIN_EMAIL', 'SEED_ADMIN_PASSWORD'], optional: [] },
+	{ required: ['SEED_DEMO'], optional: ['SEED_DEMO_PASSWORD'] }
 ];
 
 /**
@@ -127,8 +132,11 @@ export function checkConfig(env: NodeJS.ProcessEnv = process.env): string {
 	if (env.S3_ENDPOINT) parses(() => endpointUrl(env.S3_ENDPOINT!));
 	parses(() => keyPrefix(env.S3_PREFIX));
 
-	if (env.SEED_ON_START && !['1', 'true', '0', 'false'].includes(env.SEED_ON_START)) {
-		problems.push('SEED_ON_START is not 1, true, 0 or false');
+	for (const name of ['SEED_ON_START', 'SEED_DEMO']) {
+		const value = env[name];
+		if (value && !['1', 'true', '0', 'false'].includes(value)) {
+			problems.push(`${name} is not 1, true, 0 or false`);
+		}
 	}
 
 	if (problems.length) {
@@ -140,6 +148,6 @@ export function checkConfig(env: NodeJS.ProcessEnv = process.env): string {
 		`database ${databaseName(databaseUrl!)}`,
 		`origin ${env.ORIGIN}`,
 		`uploads ${uploads}`,
-		`seed ${isOn(env.SEED_ON_START) ? 'on' : 'off'}`
+		`seed ${isOn(env.SEED_ON_START) ? (isOn(env.SEED_DEMO) ? 'on, with demo data' : 'on') : 'off'}`
 	].join(' · ');
 }

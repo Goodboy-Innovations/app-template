@@ -45,9 +45,25 @@ describe('checkConfig', () => {
 
 	it('rejects an S3 endpoint that is not http(s), and unknown seed values', () => {
 		const run = () =>
-			checkConfig({ ...base, ...s3, S3_ENDPOINT: 'ftp://s3.example.com', SEED_ON_START: 'yes' });
+			checkConfig({
+				...base,
+				...s3,
+				S3_ENDPOINT: 'ftp://s3.example.com',
+				SEED_ON_START: 'yes',
+				SEED_DEMO: 'on'
+			});
 		expect(run).toThrow('S3_ENDPOINT is not an http(s) URL');
 		expect(run).toThrow('SEED_ON_START is not 1, true, 0 or false');
+		expect(run).toThrow('SEED_DEMO is not 1, true, 0 or false');
+	});
+
+	it('shows the demo dataset in the summary, and wants SEED_DEMO with its password', () => {
+		expect(checkConfig({ ...base, SEED_ON_START: '1', SEED_DEMO: '1' })).toContain(
+			'seed on, with demo data'
+		);
+		expect(() => checkConfig({ ...base, SEED_DEMO_PASSWORD: 'secret-pw' })).toThrow(
+			'SEED_DEMO_PASSWORD set without SEED_DEMO'
+		);
 	});
 
 	it('turns uploads off when no S3 variable is set', () => {

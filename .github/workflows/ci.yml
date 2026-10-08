@@ -1,0 +1,81 @@
+# Every pull request and every push to main: lint, type check, unit tests and build, then the
+# built server started the way staging starts it, against a fresh Postgres: migrations, then the
+# admin and the demo dataset. A change that breaks the migrations or the seed can't merge.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run check
+      - run: npm test
+      - run: npm run build
+        env:
+          # The build imports server modules, which need a database URL but never connect.
+          DATABASE_URL: postgres://build:build@localhost:5432/build
+
+  start:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: app
+          POSTGRES_PASSWORD: app
+          POSTGRES_DB: app
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U app -d app" --health-interval 2s --health-timeout 5s
+          --health-retries 30
+    env:
+      DATABASE_URL: postgres://app:app@localhost:5432/app
+      ORIGIN: http://localhost:3000
+      SEED_ON_START: '1'
+      SEED_DEMO: '1'
+      SEED_ADMIN_EMAIL: admin@example.com
+      SEED_ADMIN_PASSWORD: ci-only-admin-password
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Start on an empty database, then again on the seeded one
+        run: |
+          for run in first second; do
+            node build > server.log 2>&1 &
+            pid=$!
+            for i in $(seq 1 30); do
+              wget -qO /dev/null http://127.0.0.1:3000/robots.txt && break
+              kill -0 $pid 2>/dev/null || break
+              sleep 1
+            done
+            kill $pid 2>/dev/null || true
+            wait $pid || true
+            echo "--- $run start"; cat server.log
+            grep -q 'Database: migrations applied' server.log
+            if [ $run = first ]; then grep -q 'Seed: .*demo dataset' server.log
+            else grep -q 'Seed: the database has data, skipped.' server.log; fi
+          done
