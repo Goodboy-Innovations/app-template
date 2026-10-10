@@ -23,8 +23,6 @@ A proven stack for a web app with its own users and database: it builds, tests, 
 
 How the modules are kept apart: a module is used only through its `index.ts`, and only it writes to its own tables. Each module's README says what it owns and why.
 
-The app owns its database: other apps get its data through its API, never from its tables.
-
 ## Development
 
 ```sh
