@@ -12,14 +12,14 @@ A proven stack for a web app with its own users and database: it builds, tests, 
 
 ## Layout
 
-| Path                             | What                                                                                                                                                                   |
-| -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/routes/`                    | Pages and endpoints                                                                                                                                                    |
-| `src/lib/server/modules/<name>/` | One module per area of the app: `schema.ts`, `service.ts`, `index.ts` (what others may use), `README.md`. `identity` signs users in; `notes` is the example to replace |
-| `src/lib/server/platform/`       | Config (the only place that reads environment variables), database, migrations, storage                                                                                |
-| `src/lib/server/seed/`           | The first admin and the demo dataset for an empty database                                                                                                             |
-| `drizzle/`                       | Generated SQL migrations                                                                                                                                               |
-| `Dockerfile`, `compose.yaml`     | The production image; the app with its own Postgres, locally                                                                                                           |
+| Path                             | What                                                                                                                                                                                                                 |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/routes/`                    | Pages and endpoints                                                                                                                                                                                                  |
+| `src/lib/server/modules/<name>/` | One module per area of the app: `schema.ts`, `service.ts`, `index.ts` (what others may use), `README.md`. `identity` signs users in; `notes` is the example to replace; `readme` shows this README on the front page |
+| `src/lib/server/platform/`       | Config (the only place that reads environment variables), database, migrations, storage                                                                                                                              |
+| `src/lib/server/seed/`           | The first admin and the demo dataset for an empty database                                                                                                                                                           |
+| `drizzle/`                       | Generated SQL migrations                                                                                                                                                                                             |
+| `Dockerfile`, `compose.yaml`     | The production image; the app with its own Postgres, locally                                                                                                                                                         |
 
 How the modules are kept apart: a module is used only through its `index.ts`, and only it writes to its own tables. Each module's README says what it owns and why.
 
