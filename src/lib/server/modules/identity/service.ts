@@ -1,8 +1,8 @@
-import { count, eq, inArray } from 'drizzle-orm';
+import { and, asc, count, eq, inArray } from 'drizzle-orm';
 import { APIError } from 'better-auth/api';
-import { config, db, isUuid } from '$lib/server/platform';
-import { CLIENT_IP_HEADER, auth } from './auth';
-import { users, type UserRole } from './schema';
+import { CLIENT_IP_HEADER, config, db, isUuid } from '$lib/server/platform';
+import { auth } from './auth';
+import { accounts, users, type UserRole } from './schema';
 
 export interface SessionUser {
 	id: string;
@@ -24,18 +24,75 @@ const toSessionUser = (u: {
 
 const normalizeEmail = (email: string) => email.trim().toLowerCase();
 
-/**
- * The signed-in user for a request's headers (null when not signed in), and the cookies Better
- * Auth wants to set: a session about to expire is extended, an invalid cookie cleared.
- */
-export async function getSession(
-	headers: Headers
-): Promise<{ user: SessionUser | null; setCookies: Headers }> {
+export interface SessionInfo {
+	/** The signed-in user (while an admin acts as someone, that someone); null when signed out. */
+	user: SessionUser | null;
+	/** The admin's user id while they act as `user`. */
+	impersonatedBy: string | null;
+	createdAt: Date | null;
+	/** Cookies Better Auth wants set: a session about to expire is extended, a bad one cleared. */
+	setCookies: Headers;
+}
+
+export async function getSession(headers: Headers): Promise<SessionInfo> {
 	const { headers: setCookies, response } = await auth.api.getSession({
 		headers,
 		returnHeaders: true
 	});
-	return { user: response ? toSessionUser(response.user) : null, setCookies };
+	return {
+		user: response ? toSessionUser(response.user) : null,
+		impersonatedBy: response?.session.impersonatedBy ?? null,
+		createdAt: response ? new Date(response.session.createdAt) : null,
+		setCookies
+	};
+}
+
+/** Starts a sign-in at an OAuth/OIDC provider: the address to send the browser to. */
+export async function startProviderSignIn(input: {
+	provider: string;
+	headers: Headers;
+	callbackURL: string;
+	errorCallbackURL: string;
+}): Promise<{ url: string; setCookies: Headers }> {
+	const { headers, response } = await auth.api.signInSocial({
+		headers: input.headers,
+		body: {
+			provider: input.provider,
+			callbackURL: input.callbackURL,
+			errorCallbackURL: input.errorCallbackURL,
+			disableRedirect: true
+		},
+		returnHeaders: true
+	});
+	if (!response.url) throw new Error(`No sign-in address from provider ${input.provider}`);
+	return { url: response.url, setCookies: headers };
+}
+
+/**
+ * Acts as another user (Better Auth's admin plugin). Who may act as whom is checked in Better
+ * Auth's hooks (admin-sso); a refusal is { ok: false }.
+ */
+export async function impersonate(
+	headers: Headers,
+	userId: string
+): Promise<{ ok: true; setCookies: Headers } | { ok: false; error: string }> {
+	try {
+		const result = await auth.api.impersonateUser({
+			headers,
+			body: { userId },
+			returnHeaders: true
+		});
+		return { ok: true, setCookies: result.headers };
+	} catch (err) {
+		if (!(err instanceof APIError)) throw err;
+		return { ok: false, error: err.message || 'That user cannot be acted as' };
+	}
+}
+
+/** Back to the admin's own session; returns its cookies. */
+export async function stopImpersonating(headers: Headers): Promise<Headers> {
+	const result = await auth.api.stopImpersonating({ headers, returnHeaders: true });
+	return result.headers;
 }
 
 export type SignInResult =
@@ -120,6 +177,27 @@ export async function createUser(input: {
 		password: await ctx.password.hash(input.password)
 	});
 	return toSessionUser(user);
+}
+
+export async function findUserById(id: string): Promise<SessionUser | null> {
+	if (!isUuid(id)) return null;
+	const [user] = await db.select().from(users).where(eq(users.id, id));
+	return user ? toSessionUser(user) : null;
+}
+
+/** Every user, by name. For admin views; an app with many users adds paging. */
+export async function listUsers(): Promise<SessionUser[]> {
+	return (await db.select().from(users).orderBy(asc(users.name))).map(toSessionUser);
+}
+
+/** The user's id at an OAuth/OIDC provider (its `sub`), or null when they have no account there. */
+export async function providerSubject(userId: string, providerId: string): Promise<string | null> {
+	if (!isUuid(userId)) return null;
+	const [account] = await db
+		.select({ accountId: accounts.accountId })
+		.from(accounts)
+		.where(and(eq(accounts.userId, userId), eq(accounts.providerId, providerId)));
+	return account?.accountId ?? null;
 }
 
 export async function findUserByEmail(email: string): Promise<SessionUser | null> {

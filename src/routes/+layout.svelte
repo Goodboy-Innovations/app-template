@@ -11,11 +11,21 @@
 	<title>{APP_NAME}</title>
 </svelte:head>
 
+{#if data.actingAdmin && data.user}
+	<div class="acting" role="status">
+		<span>Acting as <strong>{data.user.name}</strong> (you are {data.actingAdmin})</span>
+		<form method="POST" action="/admin?/exit">
+			<button class="link">Exit</button>
+		</form>
+	</div>
+{/if}
+
 <header>
 	<a class="brand" href="/">{APP_NAME}</a>
 	<nav aria-label="Main">
 		{#if data.user}
 			<a href="/notes">Notes</a>
+			{#if data.adminTools}<a href="/admin">Act as a user</a>{/if}
 			<a href="/account">{data.user.name}</a>
 			<form method="POST" action="/logout">
 				<button class="link">Sign out</button>
@@ -31,6 +41,16 @@
 </main>
 
 <style>
+	.acting {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 12px;
+		padding: 8px 16px;
+		background: var(--warn-soft);
+		color: var(--warn);
+		border-bottom: 1px solid var(--warn);
+	}
 	header {
 		display: flex;
 		align-items: center;
