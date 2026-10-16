@@ -1,17 +1,14 @@
-export { MIN_PASSWORD_LENGTH } from './password';
+export { CLIENT_IP_HEADER, MIN_PASSWORD_LENGTH, auth } from './auth';
 export { USER_ROLES, type UserRole } from './schema';
 export {
-	SESSION_COOKIE,
-	authenticate,
+	changePassword,
 	countUsers,
-	createSession,
 	createUser,
 	findUserByEmail,
+	getSession,
 	getUserNames,
-	invalidateSession,
-	setPassword,
-	validateSession,
-	verifyUserPassword,
+	signIn,
+	signOut,
 	type SessionUser,
 	type SignInResult
 } from './service';

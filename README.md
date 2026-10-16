@@ -6,7 +6,7 @@ A proven stack for a web app with its own users and database: it builds, tests, 
 
 - **SvelteKit 2** with Svelte 5 and TypeScript, built with Vite for Node 24 (`adapter-node`)
 - **Postgres 18** through Drizzle ORM; SQL migrations in `drizzle/`, applied when the server starts
-- **Sign-in** built in: email and password, sessions in Postgres (module `identity`)
+- **Sign-in** with Better Auth: email and password, sessions in Postgres, rate limiting (module `identity`)
 - **Uploads** to any S3-compatible bucket, optional (`aws4fetch`)
 - Vitest, ESLint, Prettier, svelte-check; CI on GitHub Actions
 
@@ -42,10 +42,19 @@ npm run dev                    # http://localhost:5173
 One container, configured only through environment variables, so it runs on any platform that runs Docker images:
 
 - **Image**: `Dockerfile`, listening on port 3000
-- **Needs**: `DATABASE_URL` (Postgres 18) and `ORIGIN` (the app's public address). Uploads need the `S3_*` variables; without them uploads are off
+- **Needs**: `DATABASE_URL` (Postgres 18), `ORIGIN` (the app's public address) and `BETTER_AUTH_SECRET` (signs session cookies; at least 32 characters, e.g. `openssl rand -base64 32`; without it outside production, each start makes a new one and signs everyone out). Behind a reverse proxy, set `ADDRESS_HEADER=X-Forwarded-For` and `XFF_DEPTH` (usually `1`), so rate limits see the client's address and not the proxy's. Uploads need the `S3_*` variables; without them uploads are off
 - **On start**: applies migrations; with `SEED_ON_START=1` an empty database gets the first admin (`SEED_ADMIN_*`), and with `SEED_DEMO=1` the demo dataset, for staging and previews
 - **Health check**: `GET /robots.txt`, which doesn't touch the database
 - **Stop**: SIGTERM shuts it down cleanly
+
+## Running outside Cloudgood
+
+The app needs no Cloudgood service. It is one container with standard settings:
+
+- **Required**: Postgres and `DATABASE_URL`, `ORIGIN`, `BETTER_AUTH_SECRET`. Run it on any Docker host, Kubernetes, a PaaS or a plain VM with Node 24
+- **Optional parts** are standard and off when unset, such as uploads to any S3-compatible store (`S3_*`)
+- **Secrets** are plain environment variables. Cloudgood fills them from its secret store, but the app only reads `process.env`
+- **Sign-in** is the app's own (Better Auth, in the app's database), not a hosted service
 
 ## This repository
 

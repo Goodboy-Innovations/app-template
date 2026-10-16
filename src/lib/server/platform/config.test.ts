@@ -66,6 +66,18 @@ describe('checkConfig', () => {
 		);
 	});
 
+	it('wants BETTER_AUTH_SECRET in production, and a long one anywhere', () => {
+		expect(() => checkConfig({ ...base, NODE_ENV: 'production' })).toThrow(
+			'BETTER_AUTH_SECRET is not set'
+		);
+		expect(() => checkConfig({ ...base, BETTER_AUTH_SECRET: 'short' })).toThrow(
+			'BETTER_AUTH_SECRET is shorter than 32 characters'
+		);
+		const secret = 'x'.repeat(32);
+		const summary = checkConfig({ ...base, NODE_ENV: 'production', BETTER_AUTH_SECRET: secret });
+		expect(summary).not.toContain(secret);
+	});
+
 	it('turns uploads off when no S3 variable is set', () => {
 		expect(checkConfig(base)).toContain('uploads off');
 	});

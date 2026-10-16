@@ -1,21 +1,18 @@
-// The session cookie and access checks: the SvelteKit side of the identity module.
+// The SvelteKit side of the identity module: Better Auth's cookies and the access checks.
 
 import { error, redirect, type Cookies } from '@sveltejs/kit';
-import { SESSION_COOKIE, createSession } from '$lib/server/modules/identity';
+import { parseSetCookieHeader, toCookieOptions } from 'better-auth/cookies';
 
-export function setSessionCookie(cookies: Cookies, url: URL, token: string, expiresAt: Date) {
-	cookies.set(SESSION_COOKIE, token, {
-		path: '/',
-		httpOnly: true,
-		sameSite: 'lax',
-		secure: url.protocol === 'https:',
-		expires: expiresAt
-	});
-}
-
-export async function startSession(cookies: Cookies, url: URL, userId: string) {
-	const { token, expiresAt } = await createSession(userId);
-	setSessionCookie(cookies, url, token, expiresAt);
+/** Copies the cookies Better Auth set on a response (sign-in, sign-out, refresh) to SvelteKit's. */
+export function applyAuthCookies(cookies: Cookies, headers: Headers) {
+	const setCookie = headers.get('set-cookie');
+	if (!setCookie) return;
+	for (const [name, attributes] of parseSetCookieHeader(setCookie)) {
+		cookies.set(name, attributes.value, {
+			...toCookieOptions(attributes),
+			path: attributes.path || '/'
+		});
+	}
 }
 
 /** Only same-site paths: "/x", but not "//host" or "/\host" (browsers treat both as another origin). */

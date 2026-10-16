@@ -1,9 +1,8 @@
-import { createHash, randomBytes } from 'node:crypto';
 import { count, eq, inArray } from 'drizzle-orm';
-import { db, DAY_MS, isUuid } from '$lib/server/platform';
-import { dummyPasswordHash, hashPassword, verifyPassword } from './password';
-import { sessions, users, type UserRole } from './schema';
-import { createThrottle } from './throttle';
+import { APIError } from 'better-auth/api';
+import { config, db, isUuid } from '$lib/server/platform';
+import { CLIENT_IP_HEADER, auth } from './auth';
+import { users, type UserRole } from './schema';
 
 export interface SessionUser {
 	id: string;
@@ -13,71 +12,114 @@ export interface SessionUser {
 	isAdmin: boolean;
 }
 
-const SESSION_DAYS = 30;
-export const SESSION_COOKIE = 'session';
-
-const hashToken = (token: string) => createHash('sha256').update(token).digest('hex');
-const toSessionUser = (u: typeof users.$inferSelect): SessionUser => ({
-	id: u.id,
-	email: u.email,
-	name: u.name,
-	role: u.role,
-	isAdmin: u.role === 'admin'
-});
+const toSessionUser = (u: {
+	id: string;
+	email: string;
+	name: string;
+	role?: unknown;
+}): SessionUser => {
+	const role: UserRole = u.role === 'admin' ? 'admin' : 'user';
+	return { id: u.id, email: u.email, name: u.name, role, isAdmin: role === 'admin' };
+};
 
 const normalizeEmail = (email: string) => email.trim().toLowerCase();
 
+/**
+ * The signed-in user for a request's headers (null when not signed in), and the cookies Better
+ * Auth wants to set: a session about to expire is extended, an invalid cookie cleared.
+ */
+export async function getSession(
+	headers: Headers
+): Promise<{ user: SessionUser | null; setCookies: Headers }> {
+	const { headers: setCookies, response } = await auth.api.getSession({
+		headers,
+		returnHeaders: true
+	});
+	return { user: response ? toSessionUser(response.user) : null, setCookies };
+}
+
+export type SignInResult =
+	{ ok: true; user: SessionUser; setCookies: Headers } | { ok: false; throttled: boolean };
+
+/**
+ * Email + password sign-in. It goes through Better Auth's HTTP handler, not its server API, so
+ * Better Auth's rate limit applies (it only guards HTTP requests).
+ */
+export async function signIn(input: {
+	email: string;
+	password: string;
+	clientAddress: string;
+	userAgent: string | null;
+}): Promise<SignInResult> {
+	const headers = new Headers({
+		'content-type': 'application/json',
+		origin: config.origin,
+		[CLIENT_IP_HEADER]: input.clientAddress
+	});
+	if (input.userAgent) headers.set('user-agent', input.userAgent);
+	const response = await auth.handler(
+		new Request(`${config.origin}/api/auth/sign-in/email`, {
+			method: 'POST',
+			headers,
+			body: JSON.stringify({ email: normalizeEmail(input.email), password: input.password })
+		})
+	);
+	if (!response.ok) return { ok: false, throttled: response.status === 429 };
+	const { user } = await response.json();
+	return { ok: true, user: toSessionUser(user), setCookies: response.headers };
+}
+
+/** Ends the request's session; returns the cookies that clear it. */
+export async function signOut(headers: Headers): Promise<Headers> {
+	const result = await auth.api.signOut({ headers, returnHeaders: true });
+	return result.headers;
+}
+
+/** Changes the password and signs every other device out; returns this device's new cookies. */
+export async function changePassword(
+	headers: Headers,
+	currentPassword: string,
+	newPassword: string
+): Promise<{ ok: true; setCookies: Headers } | { ok: false; error: string }> {
+	try {
+		const result = await auth.api.changePassword({
+			headers,
+			body: { currentPassword, newPassword, revokeOtherSessions: true },
+			returnHeaders: true
+		});
+		return { ok: true, setCookies: result.headers };
+	} catch (err) {
+		if (!(err instanceof APIError)) throw err;
+		const code = (err.body as { code?: string } | undefined)?.code;
+		if (code === 'INVALID_PASSWORD') return { ok: false, error: 'The current password is wrong' };
+		return { ok: false, error: err.message || 'The password could not be changed' };
+	}
+}
+
+/** Adds a user with a password (seeding, admin tools). Sign-up through the API is off. */
 export async function createUser(input: {
 	email: string;
 	name: string;
 	password: string;
 	role?: UserRole;
 }): Promise<SessionUser> {
-	const [user] = await db
-		.insert(users)
-		.values({
+	const ctx = await auth.$context;
+	const user = await ctx.internalAdapter.createUser(
+		{
 			email: normalizeEmail(input.email),
 			name: input.name.trim(),
-			passwordHash: await hashPassword(input.password),
+			emailVerified: false,
 			role: input.role ?? 'user'
-		})
-		.returning();
+		},
+		{ method: 'email-password' }
+	);
+	await ctx.internalAdapter.linkAccount({
+		userId: user.id,
+		providerId: 'credential',
+		accountId: user.id,
+		password: await ctx.password.hash(input.password)
+	});
 	return toSessionUser(user);
-}
-
-export async function setPassword(userId: string, password: string): Promise<void> {
-	await db
-		.update(users)
-		.set({ passwordHash: await hashPassword(password) })
-		.where(eq(users.id, userId));
-	// Signing everyone out of the account is the expected effect of a password change.
-	await db.delete(sessions).where(eq(sessions.userId, userId));
-}
-
-const throttle = createThrottle();
-
-export type SignInResult = { ok: true; user: SessionUser } | { ok: false; throttled: boolean };
-
-/** Email + password sign-in, in constant-ish time, with a cool-down after repeated failures. */
-export async function authenticate(email: string, password: string): Promise<SignInResult> {
-	const key = normalizeEmail(email);
-	if (throttle.isLocked(key)) return { ok: false, throttled: true };
-
-	const [user] = await db.select().from(users).where(eq(users.email, key));
-	// Verifying against a dummy hash when the user doesn't exist keeps response times the same,
-	// so sign-in can't be used to probe for emails.
-	const valid = await verifyPassword(password, user?.passwordHash ?? (await dummyPasswordHash()));
-	if (!user || !valid) {
-		throttle.recordFailure(key);
-		return { ok: false, throttled: false };
-	}
-	throttle.clear(key);
-	return { ok: true, user: toSessionUser(user) };
-}
-
-export async function verifyUserPassword(userId: string, password: string): Promise<boolean> {
-	const [user] = await db.select().from(users).where(eq(users.id, userId));
-	return !!user && (await verifyPassword(password, user.passwordHash));
 }
 
 export async function findUserByEmail(email: string): Promise<SessionUser | null> {
@@ -102,40 +144,4 @@ export async function getUserNames(ids: string[]): Promise<Map<string, string>> 
 export async function countUsers(): Promise<number> {
 	const [row] = await db.select({ n: count() }).from(users);
 	return row.n;
-}
-
-/** Creates a session and returns the raw token to put in the cookie. */
-export async function createSession(userId: string): Promise<{ token: string; expiresAt: Date }> {
-	const token = randomBytes(32).toString('base64url');
-	const expiresAt = new Date(Date.now() + SESSION_DAYS * DAY_MS);
-	await db.insert(sessions).values({ id: hashToken(token), userId, expiresAt });
-	return { token, expiresAt };
-}
-
-/** Validates a session token and slides its expiry forward when it is half used up. */
-export async function validateSession(
-	token: string
-): Promise<{ user: SessionUser; expiresAt: Date } | null> {
-	const id = hashToken(token);
-	const [row] = await db
-		.select({ user: users, session: sessions })
-		.from(sessions)
-		.innerJoin(users, eq(users.id, sessions.userId))
-		.where(eq(sessions.id, id));
-	if (!row) return null;
-
-	let expiresAt = row.session.expiresAt;
-	if (expiresAt.getTime() < Date.now()) {
-		await db.delete(sessions).where(eq(sessions.id, id));
-		return null;
-	}
-	if (expiresAt.getTime() - Date.now() < (SESSION_DAYS / 2) * DAY_MS) {
-		expiresAt = new Date(Date.now() + SESSION_DAYS * DAY_MS);
-		await db.update(sessions).set({ expiresAt }).where(eq(sessions.id, id));
-	}
-	return { user: toSessionUser(row.user), expiresAt };
-}
-
-export async function invalidateSession(token: string): Promise<void> {
-	await db.delete(sessions).where(eq(sessions.id, hashToken(token)));
 }

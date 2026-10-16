@@ -47,6 +47,7 @@
 		"vitest": "^4.1.11"
 	},
 	"dependencies": {
-		"aws4fetch": "^1.0.20"
+		"aws4fetch": "^1.0.20",
+		"better-auth": "1.7.7"
 	}
 }
