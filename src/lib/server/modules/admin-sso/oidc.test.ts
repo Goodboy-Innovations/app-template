@@ -134,7 +134,8 @@ beforeAll(async () => {
 		adminRole: 'admin',
 		roleClaim: ROLE_CLAIM,
 		scopes: 'openid profile email',
-		actAsDomain: 'example.com'
+		actAsDomain: 'example.com',
+		providerName: 'Mock ID'
 	};
 });
 afterAll(() => provider.close());

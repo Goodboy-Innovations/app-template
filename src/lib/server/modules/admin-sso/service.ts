@@ -18,7 +18,11 @@ export interface AdminSession {
 	expiresAt: Date;
 }
 
-type Admin = { subject: string; email: string };
+/** Who did it, for logs and audits: the provider's `sub` and the admin's email. */
+export interface ActingAdmin {
+	subject: string;
+	email: string;
+}
 type LogAction = (typeof adminAccessLog.$inferInsert)['action'];
 
 const hashToken = (token: string) => createHash('sha256').update(token).digest('hex');
@@ -26,34 +30,37 @@ const hashToken = (token: string) => createHash('sha256').update(token).digest('
 /** Whether admin sign-in is configured (all OIDC_* variables set). */
 export const adminSsoEnabled = () => config.adminSso !== null;
 
-/** Writes the access log: a row, and a line in the server log. */
+/**
+ * Writes the access log: a row, and a line in the server log. `ip` is the client address as the
+ * app sees it (behind a proxy, adapter-node's ADDRESS_HEADER / XFF_DEPTH decide it).
+ */
 export async function logAdminAccess(
-	admin: Admin,
+	admin: ActingAdmin,
 	action: LogAction,
+	ip: string,
 	target?: { id: string; email: string }
 ): Promise<void> {
 	await db.insert(adminAccessLog).values({
 		subject: admin.subject,
 		email: admin.email,
 		action,
+		ip,
 		targetUserId: target?.id,
 		targetEmail: target?.email
 	});
-	console.log(
-		`Admin access: ${action} by ${admin.email} (${admin.subject})${target ? ` as ${target.email}` : ''}`
-	);
+	const as = target ? ` as ${target.email}` : '';
+	console.log(`Admin access: ${action} by ${admin.email} (sub ${admin.subject}) from ${ip}${as}`);
 }
 
 /** Starts an admin session for an identity whose admin role is already checked. */
-export async function createAdminSession(admin: {
-	subject: string;
-	email: string;
-	name: string;
-}): Promise<{ token: string; expiresAt: Date }> {
+export async function createAdminSession(
+	admin: ActingAdmin & { name: string },
+	ip: string
+): Promise<{ token: string; expiresAt: Date }> {
 	const token = randomBytes(32).toString('base64url');
 	const expiresAt = new Date(Date.now() + SESSION_MS);
 	await db.insert(adminSessions).values({ id: hashToken(token), ...admin, expiresAt });
-	await logAdminAccess(admin, 'sign-in');
+	await logAdminAccess(admin, 'sign-in', ip);
 	return { token, expiresAt };
 }
 
@@ -89,33 +96,34 @@ export async function listActableUsers(): Promise<SessionUser[]> {
 export async function actAs(
 	token: string,
 	session: AdminSession,
-	userId: string
+	userId: string,
+	ip: string
 ): Promise<boolean> {
 	const settings = config.adminSso;
 	const user = isUuid(userId) ? await findUserById(userId) : null;
 	if (!settings || !user || !canActAs(user.email, settings.actAsDomain)) return false;
-	if (session.actingAs) await logAdminAccess(session, 'exit', session.actingAs);
+	if (session.actingAs) await logAdminAccess(session, 'exit', ip, session.actingAs);
 	await db
 		.update(adminSessions)
 		.set({ actingAs: user.id })
 		.where(eq(adminSessions.id, hashToken(token)));
-	await logAdminAccess(session, 'act-as', user);
+	await logAdminAccess(session, 'act-as', ip, user);
 	return true;
 }
 
-export async function exitActing(token: string, session: AdminSession): Promise<void> {
+export async function exitActing(token: string, session: AdminSession, ip: string): Promise<void> {
 	if (!session.actingAs) return;
 	await db
 		.update(adminSessions)
 		.set({ actingAs: null })
 		.where(eq(adminSessions.id, hashToken(token)));
-	await logAdminAccess(session, 'exit', session.actingAs);
+	await logAdminAccess(session, 'exit', ip, session.actingAs);
 }
 
-export async function endAdminSession(token: string): Promise<void> {
+export async function endAdminSession(token: string, ip: string): Promise<void> {
 	const [row] = await db
 		.delete(adminSessions)
 		.where(eq(adminSessions.id, hashToken(token)))
 		.returning();
-	if (row) await logAdminAccess(row, 'sign-out');
+	if (row) await logAdminAccess(row, 'sign-out', ip);
 }

@@ -4,6 +4,7 @@ CREATE TABLE "admin_access_log" (
 	"subject" text NOT NULL,
 	"email" text NOT NULL,
 	"action" text NOT NULL,
+	"ip" text NOT NULL,
 	"target_user_id" uuid,
 	"target_email" text
 );

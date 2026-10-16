@@ -44,7 +44,7 @@ export const config = {
 			prefix: keyPrefix(env.S3_PREFIX)
 		};
 	},
-	/** Admin sign-in through an OIDC provider (Cloudgood ID); null when off. */
+	/** Admin sign-in through any OIDC provider; null when off. */
 	get adminSso() {
 		return adminSsoSettings(process.env);
 	}
@@ -60,6 +60,8 @@ export interface AdminSsoSettings {
 	scopes: string;
 	/** Admins may act only as users whose email is at this domain. */
 	actAsDomain: string;
+	/** Shown on the sign-in button: "Sign in as admin with <providerName>". */
+	providerName: string;
 }
 
 export function adminSsoSettings(env: NodeJS.ProcessEnv): AdminSsoSettings | null {
@@ -73,7 +75,8 @@ export function adminSsoSettings(env: NodeJS.ProcessEnv): AdminSsoSettings | nul
 		adminRole: env.OIDC_ADMIN_ROLE,
 		roleClaim: env.OIDC_ROLE_CLAIM || 'urn:zitadel:iam:org:project:roles',
 		scopes: env.OIDC_SCOPES || 'openid profile email urn:zitadel:iam:org:projects:roles',
-		actAsDomain: (env.OIDC_ACT_AS_DOMAIN || 'example.com').toLowerCase()
+		actAsDomain: (env.OIDC_ACT_AS_DOMAIN || 'example.com').toLowerCase(),
+		providerName: env.OIDC_PROVIDER_NAME || 'Cloudgood ID'
 	};
 }
 
@@ -142,7 +145,7 @@ const GROUPS = [
 	{ required: ['SEED_DEMO'], optional: ['SEED_DEMO_PASSWORD'] },
 	{
 		required: ['OIDC_ISSUER', 'OIDC_CLIENT_ID', 'OIDC_CLIENT_SECRET', 'OIDC_ADMIN_ROLE'],
-		optional: ['OIDC_ROLE_CLAIM', 'OIDC_SCOPES', 'OIDC_ACT_AS_DOMAIN']
+		optional: ['OIDC_ROLE_CLAIM', 'OIDC_SCOPES', 'OIDC_ACT_AS_DOMAIN', 'OIDC_PROVIDER_NAME']
 	}
 ];
 

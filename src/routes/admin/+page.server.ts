@@ -16,17 +16,17 @@ export const load: PageServerLoad = async ({ locals }) => {
 };
 
 export const actions: Actions = {
-	act: async ({ request, locals, cookies }) => {
+	act: async ({ request, locals, cookies, getClientAddress }) => {
 		const admin = requireAdmin(locals, request.method);
 		const userId = String((await request.formData()).get('user') ?? '');
-		if (!(await actAs(cookies.get(ADMIN_COOKIE)!, admin, userId))) {
+		if (!(await actAs(cookies.get(ADMIN_COOKIE)!, admin, userId, getClientAddress()))) {
 			return fail(400, { error: 'That user cannot be acted as' });
 		}
 		redirect(303, '/');
 	},
-	exit: async ({ request, locals, cookies }) => {
+	exit: async ({ request, locals, cookies, getClientAddress }) => {
 		const admin = requireAdmin(locals, request.method);
-		await exitActing(cookies.get(ADMIN_COOKIE)!, admin);
+		await exitActing(cookies.get(ADMIN_COOKIE)!, admin, getClientAddress());
 		redirect(303, '/admin');
 	}
 };

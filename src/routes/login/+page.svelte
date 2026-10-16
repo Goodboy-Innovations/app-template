@@ -40,7 +40,9 @@
 	</form>
 	{#if data.adminSso}
 		<p class="admin-sso">
-			<a href="/auth/oidc/start" data-sveltekit-reload>Sign in as admin with Cloudgood ID</a>
+			<a href="/auth/oidc/start" data-sveltekit-reload
+				>Sign in as admin with {data.adminSso.providerName}</a
+			>
 		</p>
 	{/if}
 </div>

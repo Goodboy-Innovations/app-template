@@ -95,7 +95,8 @@ describe('admin sign-in settings', () => {
 			adminRole: 'admin',
 			roleClaim: 'urn:zitadel:iam:org:project:roles',
 			scopes: 'openid profile email urn:zitadel:iam:org:projects:roles',
-			actAsDomain: 'example.com'
+			actAsDomain: 'example.com',
+			providerName: 'Cloudgood ID'
 		});
 		const summary = checkConfig({ ...base, ...oidc });
 		expect(summary).toContain('admin sign-in oidc https://id.example.org/');

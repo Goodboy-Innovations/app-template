@@ -1,5 +1,5 @@
 {
-  "id": "20cb125f-fb5a-4243-a01a-449ec3f4bf56",
+  "id": "fcf5cdc6-fee2-4817-a333-2f120031326e",
   "prevId": "92db8bbf-3690-4c83-8388-a92e7295b6d8",
   "version": "7",
   "dialect": "postgresql",
@@ -36,6 +36,12 @@
         },
         "action": {
           "name": "action",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ip": {
+          "name": "ip",
           "type": "text",
           "primaryKey": false,
           "notNull": true

@@ -1,5 +1,5 @@
-// The OIDC side: Authorization Code with PKCE against the provider (Zitadel in Cloudgood),
-// through openid-client. No database here, so it is tested against a mock provider.
+// The OIDC side: Authorization Code with PKCE against any standard OIDC provider, through
+// openid-client. No database here, so it is tested against a mock provider.
 
 import * as client from 'openid-client';
 // From config directly: the platform index opens the database pool, which these tests don't need.

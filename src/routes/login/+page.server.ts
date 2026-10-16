@@ -1,12 +1,12 @@
 import { fail, redirect } from '@sveltejs/kit';
-import { adminSsoEnabled } from '$lib/server/modules/admin-sso';
 import { authenticate } from '$lib/server/modules/identity';
+import { config } from '$lib/server/platform';
 import { safeNext, startSession } from '$lib/server/session';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = ({ locals, url }) => {
 	if (locals.user) redirect(303, safeNext(url.searchParams.get('next')));
-	return { adminSso: adminSsoEnabled() };
+	return { adminSso: config.adminSso && { providerName: config.adminSso.providerName } };
 };
 
 export const actions: Actions = {

@@ -10,7 +10,7 @@ import {
 import { OIDC_PENDING_COOKIE, oidcRedirectUri, setAdminCookie } from '$lib/server/session';
 import type { RequestHandler } from './$types';
 
-export const GET: RequestHandler = async ({ cookies, url }) => {
+export const GET: RequestHandler = async ({ cookies, url, getClientAddress }) => {
 	const settings = config.adminSso;
 	if (!settings) error(404, 'Not found');
 
@@ -33,10 +33,10 @@ export const GET: RequestHandler = async ({ cookies, url }) => {
 	}
 
 	if (!identity.isAdmin) {
-		await logAdminAccess(identity, 'refused');
+		await logAdminAccess(identity, 'refused', getClientAddress());
 		error(403, `${identity.email || 'This account'} has no admin role for this app.`);
 	}
-	const { token, expiresAt } = await createAdminSession(identity);
+	const { token, expiresAt } = await createAdminSession(identity, getClientAddress());
 	setAdminCookie(cookies, url, token, expiresAt);
 	redirect(303, '/admin');
 };

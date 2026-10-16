@@ -25,6 +25,8 @@ export const adminAccessLog = pgTable(
 			enum: ['sign-in', 'refused', 'act-as', 'exit', 'sign-out']
 		}).notNull(),
 		/** The user acted as (act-as, exit). */
+		/** The client address as the app sees it. */
+		ip: text('ip').notNull(),
 		targetUserId: uuid('target_user_id'),
 		targetEmail: text('target_email')
 	},

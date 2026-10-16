@@ -9,8 +9,8 @@
 
 <h1>Act as a user</h1>
 <p>
-	You are signed in as an admin with Cloudgood ID. Pick a demo user to see the app as they do. Every
-	switch is logged.
+	You are signed in as an admin through your identity provider. Pick a demo user to see the app as
+	they do. Every switch is logged.
 </p>
 {#if form?.error}<p class="notice warn" role="alert">{form.error}</p>{/if}
 

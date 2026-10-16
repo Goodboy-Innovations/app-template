@@ -9,5 +9,6 @@ export {
 	listActableUsers,
 	logAdminAccess,
 	validateAdminSession,
+	type ActingAdmin,
 	type AdminSession
 } from './service';

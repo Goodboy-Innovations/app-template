@@ -40,12 +40,16 @@ export const handle: Handle = async ({ event, resolve }) => {
 	// An admin signed in with Cloudgood ID (admin-sso, only when OIDC_* is set) who acts as a demo
 	// user: that user is the signed-in user for every page, without a session of their own.
 	event.locals.admin = null;
+	event.locals.actingAdmin = null;
 	const adminToken = adminSsoEnabled() ? cookies.get(ADMIN_COOKIE) : undefined;
 	if (adminToken) {
 		const admin = await validateAdminSession(adminToken);
 		if (admin) {
 			event.locals.admin = admin;
-			if (admin.actingAs) event.locals.user = admin.actingAs;
+			if (admin.actingAs) {
+				event.locals.user = admin.actingAs;
+				event.locals.actingAdmin = { subject: admin.subject, email: admin.email };
+			}
 		} else {
 			cookies.delete(ADMIN_COOKIE, { path: '/' });
 		}
