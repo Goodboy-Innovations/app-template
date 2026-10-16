@@ -18,6 +18,10 @@ export const users = pgTable('users', {
 	emailVerified: boolean('email_verified').notNull().default(false),
 	image: text('image'),
 	role: text('role', { enum: USER_ROLES }).notNull().default('user'),
+	// Better Auth's admin plugin.
+	banned: boolean('banned').notNull().default(false),
+	banReason: text('ban_reason'),
+	banExpires: timestamp('ban_expires', { withTimezone: true }),
 	...timestamps
 });
 
@@ -33,6 +37,8 @@ export const sessions = pgTable(
 		expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
 		ipAddress: text('ip_address'),
 		userAgent: text('user_agent'),
+		/** The admin acting as this session's user (Better Auth's admin plugin); null otherwise. */
+		impersonatedBy: uuid('impersonated_by'),
 		...timestamps
 	},
 	(t) => [index('sessions_user_id_idx').on(t.userId)]

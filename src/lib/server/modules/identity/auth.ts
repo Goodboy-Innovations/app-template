@@ -4,19 +4,14 @@
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { hashPassword, verifyPassword } from 'better-auth/crypto';
-import { config, db } from '$lib/server/platform';
+import { admin } from 'better-auth/plugins/admin';
+import { adminSsoPlugins } from '$lib/server/modules/admin-sso';
+import { CLIENT_IP_HEADER, config, db } from '$lib/server/platform';
 import { verifyLegacyPassword } from './password';
 import { accounts, sessions, users, verifications } from './schema';
 
 export const MIN_PASSWORD_LENGTH = 10;
 const DAY_SECONDS = 24 * 60 * 60;
-
-/**
- * The client address, set by hooks.server.ts on every request it hands to Better Auth (from
- * SvelteKit's getClientAddress, which honours ADDRESS_HEADER / XFF_DEPTH). Any value the client
- * sent is replaced, so the rate limit can't be dodged by inventing addresses.
- */
-export const CLIENT_IP_HEADER = 'x-app-client-ip';
 
 export const auth = betterAuth({
 	baseURL: config.origin,
@@ -53,5 +48,13 @@ export const auth = betterAuth({
 		database: { generateId: 'uuid' },
 		ipAddress: { ipAddressHeaders: [CLIENT_IP_HEADER] }
 	},
+	// OAuth accounts never attach to an existing user with the same email.
+	account: { accountLinking: { enabled: false } },
+	plugins: [
+		// Roles, and acting as a user (impersonation) for an hour at a time. Its API is closed
+		// except what admin-sso opens, and only when OIDC admin sign-in is configured.
+		admin({ adminRoles: ['admin'], impersonationSessionDuration: 60 * 60 }),
+		...adminSsoPlugins(config.adminSso)
+	],
 	telemetry: { enabled: false }
 });

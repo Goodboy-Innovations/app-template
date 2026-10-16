@@ -1,9 +1,9 @@
 import type { Handle, ServerInit } from '@sveltejs/kit';
 import { building, dev } from '$app/environment';
-import { checkConfig, config, migrateDatabase, sql } from '$lib/server/platform';
-import { CLIENT_IP_HEADER, auth, getSession } from '$lib/server/modules/identity';
+import { CLIENT_IP_HEADER, checkConfig, config, migrateDatabase, sql } from '$lib/server/platform';
+import { auth, getSession } from '$lib/server/modules/identity';
 import { seedDatabase } from '$lib/server/seed';
-import { applyAuthCookies, requireUser } from '$lib/server/session';
+import { applyAuthCookies, requireUser, resolveAdminSession } from '$lib/server/session';
 
 // Before the first request: check the environment, bring the schema up to date, and with
 // SEED_ON_START seed an empty database (with SEED_DEMO, the demo dataset too). A failure stops the server. In development
@@ -35,8 +35,12 @@ export const handle: Handle = async ({ event, resolve }) => {
 	}
 
 	const session = await getSession(request.headers);
-	event.locals.user = session.user;
 	applyAuthCookies(cookies, session.setCookies);
+	// With admin sign-in (admin-sso): while an admin acts as a demo user, that user is the
+	// signed-in user and the admin is in actingAdmin.
+	const { user, actingAdmin } = await resolveAdminSession(session, request.headers, cookies);
+	event.locals.user = user;
+	event.locals.actingAdmin = actingAdmin;
 
 	if (SIGNED_IN.some((path) => url.pathname === path || url.pathname.startsWith(`${path}/`))) {
 		requireUser(event.locals, url, event.request.method);

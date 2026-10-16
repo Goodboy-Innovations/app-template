@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { checkConfig, keyPrefix } from './config';
+import { adminSsoSettings, checkConfig, keyPrefix } from './config';
 
 const base = {
 	DATABASE_URL: 'postgres://app:secret@db.example.com:5432/app',
@@ -17,7 +17,7 @@ describe('checkConfig', () => {
 	it('summarises a complete configuration without secrets', () => {
 		const summary = checkConfig({ ...base, ...s3, S3_PREFIX: 'staging', SEED_ON_START: '1' });
 		expect(summary).toBe(
-			'database db.example.com/app · origin https://app.example.com · uploads s3 app-files/staging/ · seed on'
+			'database db.example.com/app · origin https://app.example.com · uploads s3 app-files/staging/ · admin sign-in off · seed on'
 		);
 		expect(summary).not.toContain('secret');
 		expect(summary).not.toContain('key');
@@ -80,6 +80,48 @@ describe('checkConfig', () => {
 
 	it('turns uploads off when no S3 variable is set', () => {
 		expect(checkConfig(base)).toContain('uploads off');
+	});
+});
+
+const oidc = {
+	OIDC_ISSUER: 'https://id.example.org/',
+	OIDC_CLIENT_ID: 'client',
+	OIDC_CLIENT_SECRET: 'oidc-secret',
+	OIDC_ADMIN_ROLE: 'admin'
+};
+
+describe('admin sign-in settings', () => {
+	it('are off unless all four OIDC_* are set, and name the missing ones', () => {
+		expect(adminSsoSettings({})).toBeNull();
+		expect(checkConfig(base)).toContain('admin sign-in off');
+		expect(() => checkConfig({ ...base, OIDC_ISSUER: oidc.OIDC_ISSUER })).toThrow(
+			'OIDC_ISSUER set without OIDC_CLIENT_ID, OIDC_CLIENT_SECRET, OIDC_ADMIN_ROLE'
+		);
+	});
+
+	it('default to Zitadel roles and demo users at example.com', () => {
+		expect(adminSsoSettings(oidc)).toEqual({
+			issuer: 'https://id.example.org',
+			clientId: 'client',
+			clientSecret: 'oidc-secret',
+			adminRole: 'admin',
+			roleClaim: 'urn:zitadel:iam:org:project:roles',
+			scopes: 'openid profile email urn:zitadel:iam:org:projects:roles',
+			actAsDomain: 'example.com',
+			providerName: 'Cloudgood ID'
+		});
+		const summary = checkConfig({ ...base, ...oidc });
+		expect(summary).toContain('admin sign-in oidc https://id.example.org/');
+		expect(summary).not.toContain('oidc-secret');
+	});
+
+	it('want https, except on this machine', () => {
+		expect(() => checkConfig({ ...base, ...oidc, OIDC_ISSUER: 'http://id.example.org' })).toThrow(
+			'OIDC_ISSUER is not an https URL'
+		);
+		expect(checkConfig({ ...base, ...oidc, OIDC_ISSUER: 'http://localhost:8080' })).toContain(
+			'admin sign-in oidc'
+		);
 	});
 });
 

@@ -1,4 +1,4 @@
-export { checkConfig, config } from './config';
+export { CLIENT_IP_HEADER, checkConfig, config, issuerUrl, type AdminSsoSettings } from './config';
 export { db, sql, type Db } from './db';
 export { migrateDatabase } from './migrate';
 export { objectStore, type ObjectStore } from './storage';
