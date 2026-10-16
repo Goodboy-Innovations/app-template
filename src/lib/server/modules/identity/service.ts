@@ -105,14 +105,11 @@ export type SignInResult =
 export async function signIn(input: {
 	email: string;
 	password: string;
-	clientAddress: string;
+	clientAddress: string | null;
 	userAgent: string | null;
 }): Promise<SignInResult> {
-	const headers = new Headers({
-		'content-type': 'application/json',
-		origin: config.origin,
-		[CLIENT_IP_HEADER]: input.clientAddress
-	});
+	const headers = new Headers({ 'content-type': 'application/json', origin: config.origin });
+	if (input.clientAddress) headers.set(CLIENT_IP_HEADER, input.clientAddress);
 	if (input.userAgent) headers.set('user-agent', input.userAgent);
 	const response = await auth.handler(
 		new Request(`${config.origin}/api/auth/sign-in/email`, {

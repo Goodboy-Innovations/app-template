@@ -2,6 +2,7 @@ import type { Handle, ServerInit } from '@sveltejs/kit';
 import { building, dev } from '$app/environment';
 import { CLIENT_IP_HEADER, checkConfig, config, migrateDatabase, sql } from '$lib/server/platform';
 import { auth, getSession } from '$lib/server/modules/identity';
+import { clientAddress } from '$lib/server/client-address';
 import { seedDatabase } from '$lib/server/seed';
 import { applyAuthCookies, requireUser, resolveAdminSession } from '$lib/server/session';
 
@@ -27,8 +28,11 @@ export const handle: Handle = async ({ event, resolve }) => {
 	if (building) return resolve(event);
 
 	// Better Auth sees the client address as the app does (ADDRESS_HEADER / XFF_DEPTH), never
-	// one the client sent: its rate limit and session records use it.
-	request.headers.set(CLIENT_IP_HEADER, event.getClientAddress());
+	// one the client sent: its rate limit, session records and the admin log use it. A request
+	// without one (a health check bypassing the proxy) gets none, not a 500.
+	const address = clientAddress(event);
+	if (address) request.headers.set(CLIENT_IP_HEADER, address);
+	else request.headers.delete(CLIENT_IP_HEADER);
 	// Its HTTP API: OAuth callbacks and anything an app calls from the browser.
 	if (url.pathname === '/api/auth' || url.pathname.startsWith('/api/auth/')) {
 		return auth.handler(request);
