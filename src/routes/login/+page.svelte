@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { page } from '$app/state';
 
-	let { form } = $props();
+	let { data, form } = $props();
 	const next = $derived(page.url.searchParams.get('next'));
 </script>
 
@@ -38,4 +38,18 @@
 		</div>
 		<button type="submit">Sign in</button>
 	</form>
+	{#if data.adminSso}
+		<p class="admin-sso">
+			<a href="/auth/oidc/start" data-sveltekit-reload>Sign in as admin with Cloudgood ID</a>
+		</p>
+	{/if}
 </div>
+
+<style>
+	.admin-sso {
+		margin: 16px 0 0;
+		padding-top: 12px;
+		border-top: 1px solid var(--border);
+		font-size: 0.95rem;
+	}
+</style>

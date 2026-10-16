@@ -43,8 +43,54 @@ export const config = {
 			secretAccessKey: env.S3_SECRET_ACCESS_KEY,
 			prefix: keyPrefix(env.S3_PREFIX)
 		};
+	},
+	/** Admin sign-in through an OIDC provider (Cloudgood ID); null when off. */
+	get adminSso() {
+		return adminSsoSettings(process.env);
 	}
 };
+
+export interface AdminSsoSettings {
+	issuer: string;
+	clientId: string;
+	clientSecret: string;
+	/** The role an admin must have, read from `roleClaim` in the ID token or userinfo. */
+	adminRole: string;
+	roleClaim: string;
+	scopes: string;
+	/** Admins may act only as users whose email is at this domain. */
+	actAsDomain: string;
+}
+
+export function adminSsoSettings(env: NodeJS.ProcessEnv): AdminSsoSettings | null {
+	if (!env.OIDC_ISSUER || !env.OIDC_CLIENT_ID || !env.OIDC_CLIENT_SECRET || !env.OIDC_ADMIN_ROLE) {
+		return null;
+	}
+	return {
+		issuer: env.OIDC_ISSUER.replace(/\/+$/, ''),
+		clientId: env.OIDC_CLIENT_ID,
+		clientSecret: env.OIDC_CLIENT_SECRET,
+		adminRole: env.OIDC_ADMIN_ROLE,
+		roleClaim: env.OIDC_ROLE_CLAIM || 'urn:zitadel:iam:org:project:roles',
+		scopes: env.OIDC_SCOPES || 'openid profile email urn:zitadel:iam:org:projects:roles',
+		actAsDomain: (env.OIDC_ACT_AS_DOMAIN || 'example.com').toLowerCase()
+	};
+}
+
+/** https, or http only on this machine (a mock provider in tests and local development). */
+export function issuerUrl(issuer: string): URL {
+	let url: URL;
+	try {
+		url = new URL(issuer);
+	} catch {
+		throw new Error('OIDC_ISSUER is not a valid URL');
+	}
+	const local = ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
+	if (url.protocol !== 'https:' && !(url.protocol === 'http:' && local)) {
+		throw new Error('OIDC_ISSUER is not an https URL');
+	}
+	return url;
+}
 
 const isOn = (value: string | undefined) => value === '1' || value === 'true';
 
@@ -93,7 +139,11 @@ const GROUPS = [
 		optional: ['S3_REGION', 'S3_PREFIX']
 	},
 	{ required: ['SEED_ADMIN_EMAIL', 'SEED_ADMIN_PASSWORD'], optional: [] },
-	{ required: ['SEED_DEMO'], optional: ['SEED_DEMO_PASSWORD'] }
+	{ required: ['SEED_DEMO'], optional: ['SEED_DEMO_PASSWORD'] },
+	{
+		required: ['OIDC_ISSUER', 'OIDC_CLIENT_ID', 'OIDC_CLIENT_SECRET', 'OIDC_ADMIN_ROLE'],
+		optional: ['OIDC_ROLE_CLAIM', 'OIDC_SCOPES', 'OIDC_ACT_AS_DOMAIN']
+	}
 ];
 
 /**
@@ -131,6 +181,7 @@ export function checkConfig(env: NodeJS.ProcessEnv = process.env): string {
 	};
 	if (env.S3_ENDPOINT) parses(() => endpointUrl(env.S3_ENDPOINT!));
 	parses(() => keyPrefix(env.S3_PREFIX));
+	if (env.OIDC_ISSUER) parses(() => issuerUrl(env.OIDC_ISSUER!));
 
 	for (const name of ['SEED_ON_START', 'SEED_DEMO']) {
 		const value = env[name];
@@ -148,6 +199,7 @@ export function checkConfig(env: NodeJS.ProcessEnv = process.env): string {
 		`database ${databaseName(databaseUrl!)}`,
 		`origin ${env.ORIGIN}`,
 		`uploads ${uploads}`,
+		`admin sign-in ${adminSsoSettings(env) ? `oidc ${env.OIDC_ISSUER}` : 'off'}`,
 		`seed ${isOn(env.SEED_ON_START) ? (isOn(env.SEED_DEMO) ? 'on, with demo data' : 'on') : 'off'}`
 	].join(' · ');
 }

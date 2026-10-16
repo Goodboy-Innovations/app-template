@@ -1,6 +1,7 @@
 import type { Handle, ServerInit } from '@sveltejs/kit';
 import { building, dev } from '$app/environment';
 import { checkConfig, config, migrateDatabase, sql } from '$lib/server/platform';
+import { ADMIN_COOKIE, adminSsoEnabled, validateAdminSession } from '$lib/server/modules/admin-sso';
 import { SESSION_COOKIE, validateSession } from '$lib/server/modules/identity';
 import { seedDatabase } from '$lib/server/seed';
 import { requireUser, setSessionCookie } from '$lib/server/session';
@@ -36,6 +37,20 @@ export const handle: Handle = async ({ event, resolve }) => {
 		}
 	}
 
+	// An admin signed in with Cloudgood ID (admin-sso, only when OIDC_* is set) who acts as a demo
+	// user: that user is the signed-in user for every page, without a session of their own.
+	event.locals.admin = null;
+	const adminToken = adminSsoEnabled() ? cookies.get(ADMIN_COOKIE) : undefined;
+	if (adminToken) {
+		const admin = await validateAdminSession(adminToken);
+		if (admin) {
+			event.locals.admin = admin;
+			if (admin.actingAs) event.locals.user = admin.actingAs;
+		} else {
+			cookies.delete(ADMIN_COOKIE, { path: '/' });
+		}
+	}
+
 	if (SIGNED_IN.some((path) => url.pathname === path || url.pathname.startsWith(`${path}/`))) {
 		requireUser(event.locals, url, event.request.method);
 	}
@@ -44,6 +59,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 	response.headers.set('x-content-type-options', 'nosniff');
 	response.headers.set('referrer-policy', 'strict-origin-when-cross-origin');
 	response.headers.set('x-frame-options', 'DENY');
-	if (event.locals.user) response.headers.set('cache-control', 'private, no-store');
+	if (event.locals.user || event.locals.admin)
+		response.headers.set('cache-control', 'private, no-store');
 	return response;
 };

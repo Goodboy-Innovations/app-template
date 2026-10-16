@@ -13,4 +13,4 @@
   - No self-registration: the first admin comes from seeding; an app adds the sign-up or user pages it needs
 - **Why**
   - Every app signs in its own users and must work alone
-  - A shared identity app (OIDC) may come later; it will be optional, so this module stays
+  - Admin sign-in through OIDC is a separate, optional module (`admin-sso`), so this module stays as it is

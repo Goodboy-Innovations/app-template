@@ -8,6 +8,13 @@
       "when": 1791403308319,
       "tag": "0000_init",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1792167367691,
+      "tag": "0001_admin_sso",
+      "breakpoints": true
     }
   ]
 }

@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto';
-import { count, eq, inArray } from 'drizzle-orm';
+import { asc, count, eq, inArray } from 'drizzle-orm';
 import { db, DAY_MS, isUuid } from '$lib/server/platform';
 import { dummyPasswordHash, hashPassword, verifyPassword } from './password';
 import { sessions, users, type UserRole } from './schema';
@@ -86,6 +86,17 @@ export async function findUserByEmail(email: string): Promise<SessionUser | null
 		.from(users)
 		.where(eq(users.email, normalizeEmail(email)));
 	return user ? toSessionUser(user) : null;
+}
+
+export async function findUserById(id: string): Promise<SessionUser | null> {
+	if (!isUuid(id)) return null;
+	const [user] = await db.select().from(users).where(eq(users.id, id));
+	return user ? toSessionUser(user) : null;
+}
+
+/** Every user, by name. For admin views; an app with many users adds paging. */
+export async function listUsers(): Promise<SessionUser[]> {
+	return (await db.select().from(users).orderBy(asc(users.name))).map(toSessionUser);
 }
 
 /** Display names by user id, for other modules that keep user ids. */

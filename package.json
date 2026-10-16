@@ -35,6 +35,7 @@
 		"eslint-config-prettier": "^10.1.8",
 		"eslint-plugin-svelte": "^3.23.0",
 		"globals": "^17.13.0",
+		"jose": "^6.2.12",
 		"postgres": "^3.4.9",
 		"prettier": "^3.9.9",
 		"prettier-plugin-svelte": "^4.1.1",
@@ -47,6 +48,7 @@
 		"vitest": "^4.1.11"
 	},
 	"dependencies": {
-		"aws4fetch": "^1.0.20"
+		"aws4fetch": "^1.0.20",
+		"openid-client": "^6.8.8"
 	}
 }
