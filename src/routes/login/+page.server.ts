@@ -1,7 +1,7 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 import { ADMIN_SSO_PROVIDER } from '$lib/server/modules/admin-sso';
 import { signIn, startProviderSignIn } from '$lib/server/modules/identity';
-import { config } from '$lib/server/platform';
+import { CLIENT_IP_HEADER, config } from '$lib/server/platform';
 import { applyAuthCookies, safeNext } from '$lib/server/session';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -15,7 +15,7 @@ export const load: PageServerLoad = ({ locals, url }) => {
 };
 
 export const actions: Actions = {
-	password: async ({ request, cookies, url, getClientAddress }) => {
+	password: async ({ request, cookies, url }) => {
 		const data = await request.formData();
 		const email = String(data.get('email') ?? '').trim();
 		const password = String(data.get('password') ?? '');
@@ -25,7 +25,8 @@ export const actions: Actions = {
 				? await signIn({
 						email,
 						password,
-						clientAddress: getClientAddress(),
+						// Set by hooks.server.ts; null when the address can't be known.
+						clientAddress: request.headers.get(CLIENT_IP_HEADER),
 						userAgent: request.headers.get('user-agent')
 					})
 				: null;
