@@ -1,9 +1,9 @@
 import type { Handle, ServerInit } from '@sveltejs/kit';
 import { building, dev } from '$app/environment';
 import { checkConfig, config, migrateDatabase, sql } from '$lib/server/platform';
-import { SESSION_COOKIE, validateSession } from '$lib/server/modules/identity';
+import { CLIENT_IP_HEADER, auth, getSession } from '$lib/server/modules/identity';
 import { seedDatabase } from '$lib/server/seed';
-import { requireUser, setSessionCookie } from '$lib/server/session';
+import { applyAuthCookies, requireUser } from '$lib/server/session';
 
 // Before the first request: check the environment, bring the schema up to date, and with
 // SEED_ON_START seed an empty database (with SEED_DEMO, the demo dataset too). A failure stops the server. In development
@@ -23,18 +23,20 @@ export const init: ServerInit = async () => {
 const SIGNED_IN = ['/notes', '/account'];
 
 export const handle: Handle = async ({ event, resolve }) => {
-	const { cookies, url } = event;
-	const token = cookies.get(SESSION_COOKIE);
-	event.locals.user = null;
-	if (token) {
-		const session = await validateSession(token);
-		if (session) {
-			event.locals.user = session.user;
-			setSessionCookie(cookies, url, token, session.expiresAt);
-		} else {
-			cookies.delete(SESSION_COOKIE, { path: '/' });
-		}
+	const { cookies, url, request } = event;
+	if (building) return resolve(event);
+
+	// Better Auth sees the client address as the app does (ADDRESS_HEADER / XFF_DEPTH), never
+	// one the client sent: its rate limit and session records use it.
+	request.headers.set(CLIENT_IP_HEADER, event.getClientAddress());
+	// Its HTTP API: OAuth callbacks and anything an app calls from the browser.
+	if (url.pathname === '/api/auth' || url.pathname.startsWith('/api/auth/')) {
+		return auth.handler(request);
 	}
+
+	const session = await getSession(request.headers);
+	event.locals.user = session.user;
+	applyAuthCookies(cookies, session.setCookies);
 
 	if (SIGNED_IN.some((path) => url.pathname === path || url.pathname.startsWith(`${path}/`))) {
 		requireUser(event.locals, url, event.request.method);

@@ -1,19 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { hashPassword, verifyPassword } from './password';
+import { hashLegacyPassword, verifyLegacyPassword } from './password';
 
-describe('password hashing', () => {
-	it('verifies the right password and rejects others', async () => {
-		const hash = await hashPassword('right-password');
+describe('template v1 password hashes', () => {
+	it('verify the right password and reject others', async () => {
+		const hash = await hashLegacyPassword('right-password');
 		expect(hash.startsWith('scrypt$')).toBe(true);
-		expect(await verifyPassword('right-password', hash)).toBe(true);
-		expect(await verifyPassword('wrong-password', hash)).toBe(false);
+		expect(await verifyLegacyPassword('right-password', hash)).toBe(true);
+		expect(await verifyLegacyPassword('wrong-password', hash)).toBe(false);
 	});
 
-	it('salts every hash', async () => {
-		expect(await hashPassword('same')).not.toBe(await hashPassword('same'));
-	});
-
-	it('rejects malformed stored values', async () => {
-		expect(await verifyPassword('x', 'not-a-hash')).toBe(false);
+	it('reject malformed stored values', async () => {
+		expect(await verifyLegacyPassword('x', 'not-a-hash')).toBe(false);
 	});
 });

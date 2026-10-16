@@ -1,6 +1,8 @@
 // The one place that reads environment variables. Modules never import `$env/*`, so the same
 // code runs inside SvelteKit, in scripts (`npm run db:seed`) and in tests.
 
+import { randomBytes } from 'node:crypto';
+
 try {
 	// Loads `.env` in local development. In a container the variables come from the platform.
 	process.loadEnvFile();
@@ -16,6 +18,17 @@ export const config = {
 		// problem here, instead of only "Invalid URL".
 		if (!isPostgresUrl(url)) checkConfig();
 		return url!;
+	},
+	/** The app's public address (ORIGIN); Better Auth builds its URLs and origin checks from it. */
+	get origin() {
+		return process.env.ORIGIN || 'http://localhost:5173';
+	},
+	/**
+	 * Signs session cookies. Required in production (checkConfig); elsewhere a missing one is
+	 * replaced by a random one per process, so sessions end when the server restarts.
+	 */
+	get authSecret() {
+		return (process.env.BETTER_AUTH_SECRET ||= randomBytes(32).toString('base64url'));
 	},
 	/** Seed an empty database when the server starts. */
 	get seedOnStart() {
@@ -113,6 +126,15 @@ export function checkConfig(env: NodeJS.ProcessEnv = process.env): string {
 	if (!env.ORIGIN) problems.push('ORIGIN is not set');
 	else if (!/^https?:\/\/[^/]+$/.test(env.ORIGIN)) {
 		problems.push('ORIGIN is not an http(s) address without a path, e.g. https://app.example.com');
+	}
+
+	// Signs the session cookies (Better Auth). Without it in production, every restart would sign
+	// everyone out, and replicas would reject each other's cookies.
+	const secret = env.BETTER_AUTH_SECRET;
+	if (secret && secret.length < 32)
+		problems.push('BETTER_AUTH_SECRET is shorter than 32 characters');
+	else if (!secret && env.NODE_ENV === 'production') {
+		problems.push('BETTER_AUTH_SECRET is not set (generate one: openssl rand -base64 32)');
 	}
 
 	for (const { required, optional } of GROUPS) {
